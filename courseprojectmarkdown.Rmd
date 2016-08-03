@@ -1,0 +1,137 @@
+---
+title: "Practical Machine Learning @JHU"
+author: "Astrid Hanghøj"
+date: "3 aug 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem formulation
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases
+
+## Description
+How model was build:
+Participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+- exactly according to the specification (Class A)
+- throwing the elbows to the front (Class B)
+- lifting the dumbbell only halfway (Class C)
+- lowering the dumbbell only halfway (Class D)
+- throwing the hips to the front (Class E)
+
+I've decided to just compare two models: decision tree and randomforest from the course curriculum.
+
+Cross validation:
+The large training set (n=19622) allows for dividing the training set into two folds for cross-validation.
+
+Expected out-of-sample error: 1-accuracy in the cross-validation data.
+
+To save on compute time (slow convergence), I've done some cleanup of nearzero variance variables using caret package.
+
+
+## Loading libraries
+Loading relevant libs
+
+```{r libraries, warning=FALSE}
+rm(list = ls())
+setwd("P:/Coursera/Machine Learning")
+
+library("caret")
+library("randomForest")
+library("rpart")
+library("rpart.plot")
+```
+
+
+
+### Download and load data
+Download data 
+
+```{r dataload}
+
+
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv")
+
+trainingdata<-read.csv("pml-training.csv")
+testdata<-read.csv("pml-testing.csv")
+
+set.seed(1)
+```
+
+
+## Data cleanup
+
+```{r datacleanup}
+
+# Delete columns with all missing values
+trainingdata<-trainingdata[,colSums(is.na(trainingdata)) == 0]
+testdata <-testdata[,colSums(is.na(testdata)) == 0]
+
+# Drop irrelevant vars
+trainingdata<-trainingdata[,-c(1:7)]
+testdata <-testdata[,-c(1:7)]
+
+# Remove vars with lots of NA
+nearzero <- nearZeroVar(trainingdata, saveMetrics = TRUE)
+trainingdata <- trainingdata[, !nearzero$nzv]
+
+```
+
+## Plot data
+
+```{r plot}
+plot(trainingdata$classe, col="lightgreen", main="Levels of different classes in Training data set", xlab="classe levels", ylab="Frequency")
+```
+
+
+## Splitting data for 2-fold cross validation
+
+```{r crossvalidation}
+sampling <- createDataPartition(y=trainingdata$classe, p=0.7, list=FALSE)
+trainingdata_trainfold <- trainingdata[sampling, ] 
+trainingdata_testfold <- trainingdata[-sampling, ]
+
+```
+
+## Descision tree (DT)
+
+```{r decisiontree}
+m_decisiontree <- rpart(classe ~ ., data=trainingdata_trainfold, method="class")
+
+# Predicting:
+p_descisiontree <- predict(m_decisiontree, trainingdata_testfold, type = "class")
+
+# Plot of the Decision Tree
+rpart.plot(m_decisiontree, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+
+# Test results on our subTesting data set:
+confusionMatrix(p_descisiontree, trainingdata_testfold$classe)
+```
+
+## Random forest (RF)
+
+```{r randomforest}
+m_randomforest <- randomForest(classe ~. , data=trainingdata_trainfold, method="class")
+
+# Predicting:
+p_randomforest <- predict(m_randomforest, trainingdata_testfold, type = "class")
+
+# Test results on subTesting data set:
+confusionMatrix(p_randomforest, trainingdata_testfold$classe)
+```
+
+## Comparing DT and RF
+DT has an accuracy of  0.7359 and RF has an accuracy of 0.9949 RF is the better model for our data. The out-of-sample error is estimated to be 1-Accuracy for RF, thus 0.0051 or 5%. 
+
+
+## Modeling the full test data
+In the following we predict the test cases for the final quiz.
+```{r final}
+m_final<-randomForest(classe ~. , data=trainingdata, method="class")
+
+p_final <- predict(m_final, testdata, type = "class")
+p_final
+```
